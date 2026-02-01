@@ -42,6 +42,7 @@ interface Options {
 	maxSize: number;
 	colorSimilarityThreshold: number;
 	sortBy: SortBy;
+	crossOrigin: string;
 }
 
 const defaultOptions: Options = {
@@ -50,6 +51,7 @@ const defaultOptions: Options = {
 	maxSize: 18,
 	colorSimilarityThreshold: 50,
 	sortBy: "dominance",
+	crossOrigin: "anonymous",
 };
 
 export const useExtractColors = (
@@ -106,7 +108,7 @@ async function extractDominantColors(
 
 	return new Promise((resolve, reject) => {
 		const img = new Image();
-		img.crossOrigin = "Anonymous";
+		img.crossOrigin = options.crossOrigin;
 
 		img.onload = function () {
 			const canvas = document.createElement("canvas");
