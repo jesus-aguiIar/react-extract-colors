@@ -128,16 +128,23 @@ async function extractDominantColors(
 		img.src = imageUrl;
 	});
 
+	const { width, height } = image;
+	if (
+		!Number.isFinite(width) ||
+		width <= 0 ||
+		!Number.isFinite(height) ||
+		height <= 0
+	) {
+		throw new Error("Image width and height must be positive, finite numbers");
+	}
+
 	const canvas = document.createElement("canvas");
 	const ctx = canvas.getContext("2d");
 	if (!ctx) throw new Error("Failed to get canvas context");
 
-	const scaleFactor = Math.min(
-		1,
-		maxSize / Math.max(image.width, image.height),
-	);
-	canvas.width = image.width * scaleFactor;
-	canvas.height = image.height * scaleFactor;
+	const scaleFactor = Math.min(1, maxSize / Math.max(width, height));
+	canvas.width = Math.max(1, Math.floor(width * scaleFactor));
+	canvas.height = Math.max(1, Math.floor(height * scaleFactor));
 	ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 	const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
 	return extractPalette(data, colorSimilarityThreshold, sortBy);

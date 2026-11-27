@@ -295,6 +295,52 @@ describe("image loading", () => {
 		expect(images.getImageData).toHaveBeenCalledWith(0, 0, w, h);
 	});
 
+	test.each([
+		[1000, 1, 18, 1],
+		[1, 1000, 1, 18],
+	])(
+		"keeps both canvas dimensions positive for %i × %i",
+		async (width, height, w, h) => {
+			const { result } = mount();
+			await images.load([blue], { width, height });
+			expect(images.drawImage).toHaveBeenCalledWith(
+				images.requests[0].image,
+				0,
+				0,
+				w,
+				h,
+			);
+			expect(images.getImageData).toHaveBeenCalledWith(0, 0, w, h);
+			expect(result.current).toMatchObject({
+				dominantColor: "#0000ff",
+				loading: false,
+				error: null,
+			});
+		},
+	);
+
+	test.each([
+		[0, 10],
+		[10, 0],
+		[-1, 10],
+		[10, -1],
+		[Number.NaN, 10],
+		[10, Number.POSITIVE_INFINITY],
+	])(
+		"rejects invalid source dimensions %s × %s before accessing the canvas",
+		async (width, height) => {
+			const { result } = mount();
+			await images.load([blue], { width, height });
+			expect(result.current).toMatchObject({
+				colors: [],
+				loading: false,
+				dominantColor: null,
+			});
+			expect(result.current.error).toBeInstanceOf(Error);
+			expect(images.getContext).not.toHaveBeenCalled();
+		},
+	);
+
 	test.each(["anonymous", "use-credentials", ""])(
 		"sets crossOrigin=%j before requesting the image",
 		(crossOrigin) => {
@@ -435,23 +481,4 @@ describe("changes in inputs and error handling", () => {
 		expect(result.current.loading).toBe(false);
 		expect(result.current.error).toBeTruthy();
 	});
-});
-
-// Each expected failure asserts the desired public behavior.
-describe("known regressions", () => {
-	test.fails.each([
-		[1000, 1],
-		[1, 1000],
-	])(
-		"keeps both canvas dimensions positive for %i × %i",
-		async (width, height) => {
-			const { result } = mount();
-			await images.load([blue], { width, height });
-			expect(result.current).toMatchObject({
-				dominantColor: "#0000ff",
-				loading: false,
-				error: null,
-			});
-		},
-	);
 });
