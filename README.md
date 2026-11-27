@@ -58,7 +58,7 @@ import { useExtractColors } from "react-extract-colors";
 
 const image = "https://picsum.photos/id/237/200/300";
 
-const { colors, dominantColor, darkerColor, lighterColor, loading, error } =
+const { colors, dominantColor, textColor, darkerColor, lighterColor, loading, error } =
   useExtractColors(image);
 ```
 
@@ -68,6 +68,7 @@ const { colors, dominantColor, darkerColor, lighterColor, loading, error } =
 | :-------------- | :------------------------------------------ |
 | `colors`        | An array containing the top dominant colors |
 | `dominantColor` | The dominant color of the image             |
+| `textColor`     | An opaque hex text color for the dominant background, or `null` until a visible shade is available |
 | `darkerColor`   | A darker variant of the dominant color      |
 | `lighterColor`  | A lighter variant of the dominant color     |
 | `loading`       | Indicates whether the image is loading      |
@@ -86,16 +87,13 @@ import { useExtractColors } from "react-extract-colors";
 const image = "https://picsum.photos/id/237/200/300";
 
 const App = () => {
-  // Use the hook to extract the dominant color
-  const { dominantColor, darkerColor, lighterColor } = useExtractColors(image);
+  const { dominantColor, textColor } = useExtractColors(image, {
+    format: "hex",
+    textContrast: 7,
+  });
 
   return (
-    // set a linear gradient with colors extracted
-    <div
-      style={{
-        backgroundColor: `linear-gradient(45deg, ${dominantColor}, ${darkerColor}, ${lighterColor})`,
-      }}
-    >
+    <div style={{ backgroundColor: dominantColor ?? undefined, color: textColor ?? undefined }}>
       <h1>Extract Color</h1>
       <img src={image} alt="random image" width="200" height="300" />
     </div>
@@ -156,6 +154,14 @@ The maxColors parameter determines the number of colors to be included in the `c
 
 You can specify the color format using one of the following options: `rgba`, `rgb`, `hex`, `hsl`, or `hsv`.
 
+#### textContrast
+
+Set the target contrast ratio for text on a solid `dominantColor` background. The default is `4.5`, the WCAG AA minimum for regular text. A higher target such as `7` increases contrast when the background allows it. [WCAG contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+
+The hook chooses the better of light or dark text, then finds the nearest gray on that side that meets the target. If the target is unreachable, it returns whichever of black and white gives the highest contrast. Values outside `1–21` and non-finite numbers use the default.
+
+`textColor` is always an opaque CSS hex color. For translucent `rgba` backgrounds the calculation assumes a white surface underneath. Changing `textContrast` reuses the extracted palette.
+
 #### maxSize:
 
 The maxSize is the size at which the image will be processed to extract colors. The smaller the size, the faster the processing may be, but it affects color accuracy to some extent. If you need more precision, you can set a higher value at the expense of sacrificing some speed.
@@ -175,6 +181,7 @@ The `sortBy` parameter controls the sorting of the returned colors. You can sele
 | :------------------------- | :------- | :---------------------------------------------------------------------------------- | :----------------------------- |
 | `maxColors`                | `number` | Number of colors to get in the `colors` array **default: 3**                        | 0-100                          |
 | `format`                   | `string` | Format to get the colors **default: rgba**                                          | `rgba` `rgb` `hex` `hsl` `hsv` |
+| `textContrast` | `number` | Target text-to-background contrast ratio **default: 4.5** | 1–21 |
 | `maxSize`                  | `number` | Size to extract the colors **default: 18**                                          | 0-500                          |
 | `colorSimilarityThreshold` | `number` | RGB distance threshold for grouping similar shades. **default: 50** | 0-500                          |
 | `sortBy`                   | `string` | Determines the sorting method for the returned colors **default: dominance**        | `vibrance` `dominance`         |

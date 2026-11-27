@@ -10,6 +10,7 @@ function Palette() {
 	const result = useExtractColors("image.png");
 	assert.deepEqual(result, {
 		dominantColor: null,
+		textColor: null,
 		darkerColor: null,
 		lighterColor: null,
 		colors: [],

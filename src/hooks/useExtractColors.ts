@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
-import { type Format, formatColors } from "../colorFormats.js";
+import { useEffect, useMemo, useState } from "react";
+import {
+	type Format,
+	formatColors,
+	getTextColor,
+	defaultTextContrast,
+} from "../colorFormats.js";
 import { type Color, type SortBy, extractPalette } from "../palette.js";
 
 interface UseExtractColorReturn {
+	textColor: string | null;
 	dominantColor: string | null;
 	darkerColor: string | null;
 	lighterColor: string | null;
@@ -12,6 +18,7 @@ interface UseExtractColorReturn {
 }
 
 interface Options {
+	textContrast: number;
 	maxColors: number;
 	format: Format;
 	maxSize: number;
@@ -21,6 +28,7 @@ interface Options {
 }
 
 const defaultOptions: Options = {
+	textContrast: defaultTextContrast,
 	maxColors: 3,
 	format: "rgba",
 	maxSize: 18,
@@ -33,89 +41,104 @@ export const useExtractColors = (
 	imageUrl: string,
 	customOptions: Partial<Options> = {},
 ): UseExtractColorReturn => {
-	const options: Options = { ...defaultOptions, ...customOptions };
-
-	const [colors, setColors] = useState<string[]>([]);
-	const [dominantColor, setDominantColor] = useState<string | null>(null);
-	const [darkerColor, setDarkerColor] = useState<string | null>(null);
-	const [lighterColor, setLighterColor] = useState<string | null>(null);
-	const [loading, setLoading] = useState<boolean>(true);
+	const {
+		maxColors,
+		format,
+		textContrast,
+		maxSize,
+		colorSimilarityThreshold,
+		sortBy,
+		crossOrigin,
+	} = {
+		...defaultOptions,
+		...customOptions,
+	};
+	const [palette, setPalette] = useState<Color[] | null>(null);
+	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 
 	useEffect(() => {
-		let isMounted = true;
-
-		(async () => {
+		let active = true;
+		setLoading(true);
+		setError(null);
+		setPalette(null);
+		async function loadPalette() {
 			try {
-				if (isMounted) {
-					const colors = await extractDominantColors(imageUrl, options);
-					const formattedColors = formatColors(
-						colors,
-						options.format,
-						options.maxColors,
+				const result = await extractDominantColors(imageUrl, {
+					maxSize,
+					colorSimilarityThreshold,
+					sortBy,
+					crossOrigin,
+				});
+				if (active) setPalette(result);
+			} catch (reason) {
+				if (active)
+					setError(
+						reason instanceof Error
+							? reason
+							: new Error("Failed to load image"),
 					);
-
-					setDominantColor(formattedColors.dominantColor);
-					setDarkerColor(formattedColors.darkerColor);
-					setLighterColor(formattedColors.lighterColor);
-					setColors(formattedColors.colors);
-				}
-			} catch (error) {
-				if (isMounted) {
-					setError(error as Error);
-				}
 			} finally {
-				if (isMounted) {
-					setLoading(false);
-				}
+				if (active) setLoading(false);
 			}
-		})();
-
+		}
+		void loadPalette();
 		return () => {
-			isMounted = false;
+			active = false;
 		};
-	}, [imageUrl]);
+	}, [imageUrl, maxSize, colorSimilarityThreshold, sortBy, crossOrigin]);
 
-	return { dominantColor, darkerColor, lighterColor, loading, error, colors };
+	const formatted = useMemo(
+		() =>
+			palette
+				? formatColors(palette, format, maxColors)
+				: {
+						colors: [],
+						dominantColor: null,
+						darkerColor: null,
+						lighterColor: null,
+					},
+		[palette, format, maxColors],
+	);
+	const dominant = palette?.[0];
+	const textColor = useMemo(
+		() => (dominant ? getTextColor(dominant, textContrast, format) : null),
+		[dominant, textContrast, format],
+	);
+	return { ...formatted, textColor, loading, error };
 };
 
 async function extractDominantColors(
 	imageUrl: string,
-	options: Options,
+	{
+		maxSize,
+		colorSimilarityThreshold,
+		sortBy,
+		crossOrigin,
+	}: Pick<
+		Options,
+		"maxSize" | "colorSimilarityThreshold" | "sortBy" | "crossOrigin"
+	>,
 ): Promise<Color[]> {
-	const { maxSize, colorSimilarityThreshold, sortBy } = options;
-
-	return new Promise((resolve, reject) => {
+	const image = await new Promise<HTMLImageElement>((resolve, reject) => {
 		const img = new Image();
-		img.crossOrigin = options.crossOrigin;
-
-		img.onload = function () {
-			const canvas = document.createElement("canvas");
-			const ctx = canvas.getContext("2d");
-
-			if (!ctx) {
-				reject(new Error("Failed to get canvas context"));
-				return;
-			}
-
-			const { width, height } = img;
-			const scaleFactor = Math.min(1, maxSize / Math.max(width, height));
-
-			canvas.width = width * scaleFactor;
-			canvas.height = height * scaleFactor;
-
-			ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-			const pixels = imageData.data;
-
-			resolve(extractPalette(pixels, colorSimilarityThreshold, sortBy));
-		};
-
-		img.onerror = function (error) {
-			reject(error);
-		};
-
+		img.crossOrigin = crossOrigin;
+		img.onload = () => resolve(img);
+		img.onerror = () => reject(new Error("Failed to load image"));
 		img.src = imageUrl;
 	});
+
+	const canvas = document.createElement("canvas");
+	const ctx = canvas.getContext("2d");
+	if (!ctx) throw new Error("Failed to get canvas context");
+
+	const scaleFactor = Math.min(
+		1,
+		maxSize / Math.max(image.width, image.height),
+	);
+	canvas.width = image.width * scaleFactor;
+	canvas.height = image.height * scaleFactor;
+	ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+	const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+	return extractPalette(data, colorSimilarityThreshold, sortBy);
 }

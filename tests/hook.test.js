@@ -32,6 +32,7 @@ describe("palette extraction", () => {
 		expect(result.current).toEqual({
 			colors: [],
 			dominantColor: null,
+			textColor: null,
 			darkerColor: null,
 			lighterColor: null,
 			loading: true,
@@ -88,6 +89,7 @@ describe("palette extraction", () => {
 			await images.load([[255, 255, 255, 0]]);
 			expect(result.current).toMatchObject({
 				colors: [],
+				textColor: null,
 				dominantColor: fallback,
 				darkerColor: fallback,
 				lighterColor: fallback,
@@ -195,6 +197,86 @@ describe("palette extraction", () => {
 	});
 });
 
+describe("text contrast", () => {
+	test.each([
+		[[255, 255, 255, 255], 4.5, "#767676"],
+		[[0, 0, 0, 255], 4.5, "#757575"],
+		[[255, 255, 255, 255], 7, "#595959"],
+		[[119, 119, 119, 255], 7, "#000000"],
+		[[110, 110, 110, 255], 21, "#ffffff"],
+		[[255, 255, 255, 255], 21, "#000000"],
+		[[0, 0, 0, 255], 21, "#ffffff"],
+		[[255, 255, 255, 255], Number.NaN, "#767676"],
+		[[255, 255, 255, 255], 22, "#767676"],
+	])(
+		"selects a text shade for %j at ratio %s",
+		async (pixel, textContrast, expected) => {
+			const { result } = mount({ format: "hex", textContrast, maxColors: 0 });
+			await images.load([pixel]);
+			expect(result.current.textColor).toBe(expected);
+		},
+	);
+
+	test.each([
+		["hex", "#161616"],
+		["rgb", "#161616"],
+		["rgba", "#161616"],
+		["hsl", "#171717"],
+		["hsv", "#171717"],
+	])(
+		"measures the displayed %s background and returns CSS hex",
+		async (format, expected) => {
+			const { result } = mount({ format });
+			await images.load([[127, 127, 127, 255]]);
+			expect(result.current.textColor).toBe(expected);
+		},
+	);
+
+	test("follows the dominant background when the palette order changes", async () => {
+		const { result, rerender } = mount({ format: "hex", textContrast: 21 });
+		const white = [255, 255, 255, 255];
+		const pixels = [blue, white, white];
+		await images.load(pixels);
+		expect(result.current).toMatchObject({
+			dominantColor: "#ffffff",
+			textColor: "#000000",
+		});
+		rerender({
+			url: "first.png",
+			options: { format: "hex", textContrast: 21, sortBy: "vibrance" },
+		});
+		await images.load(pixels);
+		expect(result.current).toMatchObject({
+			dominantColor: "#0000ff",
+			textColor: "#ffffff",
+		});
+	});
+
+	test("updates contrast without reading the image again", async () => {
+		const { result, rerender } = mount();
+		await images.load([[255, 255, 255, 255]]);
+		const palette = result.current.colors;
+		expect(result.current.textColor).toBe("#767676");
+		rerender({ url: "first.png", options: { format: "hex", textContrast: 7 } });
+		expect(result.current.textColor).toBe("#595959");
+		expect(result.current.colors).toBe(palette);
+		expect(images.getImageData).toHaveBeenCalledTimes(1);
+		expect(images.requests).toHaveLength(1);
+	});
+
+	test("uses a white backdrop for translucent RGBA and solid RGB for hex", async () => {
+		const { result, rerender } = mount({ format: "rgba", textContrast: 21 });
+		await images.load([[0, 0, 0, 125]]);
+		expect(result.current.textColor).toBe("#000000");
+		rerender({
+			url: "first.png",
+			options: { format: "hex", textContrast: 21 },
+		});
+		expect(result.current.textColor).toBe("#ffffff");
+		expect(images.requests).toHaveLength(1);
+	});
+});
+
 describe("image loading", () => {
 	test.each([
 		[90, 45, undefined, 18, 9],
@@ -266,9 +348,8 @@ describe("image loading", () => {
 	});
 });
 
-// Each expected failure asserts the desired public behavior. Remove .fails with its fix.
-describe("known regressions", () => {
-	test.fails("normalizes the RGBA alpha channel for CSS", async () => {
+describe("changes in inputs and error handling", () => {
+	test("normalizes the RGBA alpha channel for CSS", async () => {
 		const { result } = mount({ format: "rgba" });
 		await images.load([[20, 40, 80, 128]]);
 		const alpha = Number(
@@ -277,29 +358,23 @@ describe("known regressions", () => {
 		expect(alpha).toBeCloseTo(128 / 255, 2);
 	});
 
-	test.fails(
-		"preserves the newest palette when requests finish out of order",
-		async () => {
-			const { result, rerender } = mount();
-			const first = images.requests[0];
-			rerender({ url: "second.png", options: { format: "hex" } });
-			await images.load([blue]);
-			await images.load([red], { request: first });
-			expect(result.current.dominantColor).toBe("#0000ff");
-		},
-	);
+	test("preserves the newest palette when requests finish out of order", async () => {
+		const { result, rerender } = mount();
+		const first = images.requests[0];
+		rerender({ url: "second.png", options: { format: "hex" } });
+		await images.load([blue]);
+		await images.load([red], { request: first });
+		expect(result.current.dominantColor).toBe("#0000ff");
+	});
 
-	test.fails(
-		"sets loading again when a completed request is replaced",
-		async () => {
-			const { result, rerender } = mount();
-			await images.load([red]);
-			rerender({ url: "second.png", options: { format: "hex" } });
-			expect(result.current.loading).toBe(true);
-		},
-	);
+	test("sets loading again when a completed request is replaced", async () => {
+		const { result, rerender } = mount();
+		await images.load([red]);
+		rerender({ url: "second.png", options: { format: "hex" } });
+		expect(result.current.loading).toBe(true);
+	});
 
-	test.fails("clears a previous image error on recovery", async () => {
+	test("clears a previous image error on recovery", async () => {
 		const { result, rerender } = mount();
 		await images.fail();
 		rerender({ url: "valid.png", options: { format: "hex" } });
@@ -307,13 +382,13 @@ describe("known regressions", () => {
 		expect(result.current.error).toBeNull();
 	});
 
-	test.fails("exposes image loading errors as Error instances", async () => {
+	test("exposes image loading errors as Error instances", async () => {
 		const { result } = mount();
 		await images.fail();
 		expect(result.current.error).toBeInstanceOf(Error);
 	});
 
-	test.fails.each([
+	test.each([
 		["format", { format: "rgb" }, ["rgb(128,128,128)", "rgb(255,0,0)"]],
 		["maxColors", { maxColors: 1 }, ["#808080"]],
 		["sortBy", { sortBy: "vibrance" }, ["#ff0000", "#808080"]],
@@ -335,13 +410,13 @@ describe("known regressions", () => {
 		},
 	);
 
-	test.fails("uses updated credentials when requesting the same URL", () => {
+	test("uses updated credentials when requesting the same URL", () => {
 		const { rerender } = mount();
 		rerender({ url: "first.png", options: { crossOrigin: "use-credentials" } });
 		expect(images.requests.at(-1).crossOrigin).toBe("use-credentials");
 	});
 
-	test.fails("resamples the same URL after maxSize changes", async () => {
+	test("resamples the same URL after maxSize changes", async () => {
 		const { rerender } = mount();
 		await images.load([red], { width: 40, height: 40 });
 		const request = images.requests.at(-1);
@@ -351,6 +426,19 @@ describe("known regressions", () => {
 		expect(images.getImageData.mock.lastCall).toEqual([0, 0, 4, 4]);
 	});
 
+	test("reports a canvas read error and finishes loading", async () => {
+		const { result } = mount();
+		images.getImageData.mockImplementation(() => {
+			throw new DOMException("Read denied", "SecurityError");
+		});
+		await images.load([red]);
+		expect(result.current.loading).toBe(false);
+		expect(result.current.error).toBeTruthy();
+	});
+});
+
+// Each expected failure asserts the desired public behavior.
+describe("known regressions", () => {
 	test.fails.each([
 		[1000, 1],
 		[1, 1000],
@@ -366,14 +454,4 @@ describe("known regressions", () => {
 			});
 		},
 	);
-
-	test.fails("reports a canvas read error and finishes loading", async () => {
-		const { result } = mount();
-		images.getImageData.mockImplementation(() => {
-			throw new DOMException("Read denied", "SecurityError");
-		});
-		await images.load([red]);
-		expect(result.current.loading).toBe(false);
-		expect(result.current.error).toBeTruthy();
-	});
 });

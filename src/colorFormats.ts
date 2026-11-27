@@ -16,9 +16,9 @@ function getFormatter(format: Format) {
 		case "rgb":
 			return formatToRgb;
 		case "hsl":
-			return formatToHsl;
+			return (color: Color | null) => formatHue(color, "hsl");
 		case "hsv":
-			return formatToHsv;
+			return (color: Color | null) => formatHue(color, "hsv");
 		default:
 			return formatToRgba;
 	}
@@ -37,6 +37,75 @@ export function formatColors(
 		lighterColor: format(dominant && getLighterColor(dominant)),
 		colors: colors.slice(0, maxColors).map(format),
 	};
+}
+
+export const defaultTextContrast = 4.5;
+
+function linearChannel(channel: number): number {
+	const srgb = channel / 255;
+	return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+}
+
+function displayedRgb(color: Color, format: Format) {
+	if (format === "hsl" || format === "hsv") {
+		// Contrast is measured against the rounded coordinates returned to the caller.
+		const { hue, saturation, level } = hueComponents(color, format);
+		const value = level / 100;
+		const chroma =
+			(saturation / 100) *
+			(format === "hsl" ? 1 - Math.abs(2 * value - 1) : value);
+		const min = value - (format === "hsl" ? chroma / 2 : chroma);
+		const channel = (offset: number) => {
+			const sector = (hue / 60 + offset) % 6;
+			return (
+				255 * (min + chroma * Math.max(0, Math.min(1, sector, 4 - sector)))
+			);
+		};
+		return { r: channel(2), g: channel(0), b: channel(4) };
+	}
+	if (format === "rgba" && color.a < 255) {
+		const alpha = color.a / 255;
+		const overWhite = (channel: number) => channel * alpha + 255 * (1 - alpha);
+		return {
+			r: overWhite(color.r),
+			g: overWhite(color.g),
+			b: overWhite(color.b),
+		};
+	}
+	return color;
+}
+
+export function getTextColor(
+	background: Color,
+	requestedRatio: number,
+	format: Format,
+): string {
+	const ratio =
+		Number.isFinite(requestedRatio) &&
+		requestedRatio >= 1 &&
+		requestedRatio <= 21
+			? requestedRatio
+			: defaultTextContrast;
+	const { r, g, b } = displayedRgb(background, format);
+	const luminance =
+		0.2126 * linearChannel(r) +
+		0.7152 * linearChannel(g) +
+		0.0722 * linearChannel(b);
+	const preferDark = (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05);
+	// Find the nearest passing 8-bit gray on the stronger side of the background.
+	// If no shade reaches the ratio, the search ends at black or white.
+	let shade = preferDark ? 0 : 255;
+	let limit = preferDark ? 256 : -1;
+	while (Math.abs(shade - limit) > 1) {
+		const mid = Math.floor((shade + limit) / 2);
+		const foreground = linearChannel(mid) + 0.05;
+		const contrast = preferDark
+			? (luminance + 0.05) / foreground
+			: foreground / (luminance + 0.05);
+		if (contrast >= ratio) shade = mid;
+		else limit = mid;
+	}
+	return formatToHex({ r: shade, g: shade, b: shade, a: 255 });
 }
 
 function getDarkerColor(color: Color): Color {
@@ -65,7 +134,7 @@ function getLighterColor(color: Color): Color {
 const formatToRgba = (color: Color | null): string => {
 	if (!color) return "rgba(0,0,0,0)";
 	const { r, g, b, a } = color;
-	return `rgba(${r},${g},${b},${a})`;
+	return `rgba(${r},${g},${b},${a / 255})`;
 };
 
 const formatToHex = (color: Color | null): string => {
@@ -80,83 +149,35 @@ const formatToRgb = (color: Color | null): string => {
 	return `rgb(${r},${g},${b})`;
 };
 
-const formatToHsl = (rgba: Color | null): string => {
-	if (!rgba) return "hsl(0,0%,0%)";
-
-	const r = rgba.r / 255;
-	const g = rgba.g / 255;
-	const b = rgba.b / 255;
-
+function hueComponents(color: Color, format: "hsl" | "hsv") {
+	const r = color.r / 255;
+	const g = color.g / 255;
+	const b = color.b / 255;
 	const max = Math.max(r, g, b);
 	const min = Math.min(r, g, b);
 	const delta = max - min;
+	const lightness = (max + min) / 2;
+	const level = format === "hsl" ? lightness : max;
+	let hue = 0;
+	let saturation = 0;
+	if (delta > 0) {
+		if (max === r) hue = (g - b) / delta + (g < b ? 6 : 0);
+		else if (max === g) hue = (b - r) / delta + 2;
+		else hue = (r - g) / delta + 4;
 
-	let h = 0;
-	let s = 0;
-	const l = (max + min) / 2;
-
-	if (delta !== 0) {
-		s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
-
-		switch (max) {
-			case r:
-				h = (g - b) / delta + (g < b ? 6 : 0);
-				break;
-			case g:
-				h = (b - r) / delta + 2;
-				break;
-			case b:
-				h = (r - g) / delta + 4;
-				break;
-		}
-
-		h /= 6;
+		if (format === "hsv") saturation = delta / max;
+		else saturation = delta / (lightness > 0.5 ? 2 - max - min : max + min);
 	}
 
-	return `hsl(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
-};
+	return {
+		hue: Math.round((hue / 6) * 360),
+		saturation: Math.round(saturation * 100),
+		level: Math.round(level * 100),
+	};
+}
 
-const formatToHsv = (rgba: Color | null): string => {
-	if (!rgba) return "hsv(0,0%,0%)";
-
-	const r = rgba.r / 255;
-	const g = rgba.g / 255;
-	const b = rgba.b / 255;
-
-	const max = Math.max(r, g, b);
-	const min = Math.min(r, g, b);
-	const d = max - min;
-
-	let h: number, s: number;
-	const v = max;
-
-	if (max !== 0) {
-		s = d / max;
-	} else {
-		s = 0;
-		h = 0;
-		return `hsv(${h}, ${s}%, ${v * 100}%)`;
-	}
-
-	if (max === min) {
-		h = 0;
-	} else {
-		switch (max) {
-			case r:
-				h = (g - b) / d + (g < b ? 6 : 0);
-				break;
-			case g:
-				h = (b - r) / d + 2;
-				break;
-			case b:
-				h = (r - g) / d + 4;
-				break;
-			default:
-				h = 0;
-		}
-
-		h /= 6;
-	}
-
-	return `hsv(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%)`;
-};
+function formatHue(color: Color | null, format: "hsl" | "hsv") {
+	if (!color) return `${format}(0,0%,0%)`;
+	const { hue, saturation, level } = hueComponents(color, format);
+	return `${format}(${hue}, ${saturation}%, ${level}%)`;
+}

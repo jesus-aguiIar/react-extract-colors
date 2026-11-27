@@ -5,6 +5,7 @@ export function usePalette(url: string) {
 		format: "hex",
 		sortBy: "vibrance",
 		maxSize: 40,
+		textContrast: 7,
 		maxColors: 4,
 		colorSimilarityThreshold: 10,
 		crossOrigin: "anonymous",
@@ -13,7 +14,8 @@ export function usePalette(url: string) {
 	const dominant: string | null = result.dominantColor;
 	const error: Error | null = result.error;
 	const loading: boolean = result.loading;
-	return { palette, dominant, error, loading };
+	const text: string | null = result.textColor;
+	return { palette, dominant, text, error, loading };
 }
 
 // @ts-expect-error The exported hook must retain its signature (issue #5).
