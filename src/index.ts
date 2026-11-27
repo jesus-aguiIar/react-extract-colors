@@ -1,3 +1,3 @@
-import { useExtractColors } from "./hooks/useExtractColors";
+import { useExtractColors } from "./hooks/useExtractColors.js";
 
 export { useExtractColors };
