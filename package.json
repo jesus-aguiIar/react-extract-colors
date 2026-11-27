@@ -2,7 +2,7 @@
 	"name": "react-extract-colors",
 	"version": "1.6.0",
 	"type": "module",
-	"description": "A react component to extract dominant colors from an image",
+	"description": "A React hook for extracting dominant or vibrant color palettes from images in the browser.",
 	"main": "dist/index.cjs",
 	"module": "dist/index.esm.js",
 	"types": "dist/index.d.ts",
@@ -19,6 +19,7 @@
 		}
 	},
 	"files": [
+		"assets/logo.svg",
 		"dist/index.esm.js",
 		"dist/index.cjs",
 		"dist/index.d.ts",
@@ -37,21 +38,20 @@
 	"author": "Jesús Aguilar",
 	"license": "MIT",
 	"keywords": [
-		"extract colors",
-		"image",
-		"dominant colors",
 		"react",
-		"reactjs",
-		"react-component",
-		"react colors"
+		"react-hook",
+		"image-palette",
+		"color-extraction",
+		"dominant-color",
+		"vibrant-colors"
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/JesusAguilarAliaga/react-extract-colors"
+		"url": "git+https://github.com/jesus-aguiIar/react-extract-colors.git"
 	},
 	"homepage": "https://react-extract-colors.netlify.app",
 	"bugs": {
-		"url": "https://github.com/JesusAguilarAliaga/react-extract-colors/issues"
+		"url": "https://github.com/jesus-aguiIar/react-extract-colors/issues"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.3",

@@ -35,7 +35,7 @@ export function formatColors(
 		dominantColor: format(dominant),
 		darkerColor: format(dominant && getDarkerColor(dominant)),
 		lighterColor: format(dominant && getLighterColor(dominant)),
-		colors: colors.slice(0, maxColors).map(format),
+		colors: colors.slice(0, Math.max(0, maxColors)).map(format),
 	};
 }
 

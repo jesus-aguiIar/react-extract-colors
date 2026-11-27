@@ -113,6 +113,7 @@ function checkTypes(fixture, mode, skipLibCheck) {
 			tsc,
 			fixture,
 			"--strict",
+			"--exactOptionalPropertyTypes",
 			"--noEmit",
 			"--target",
 			"es2020",

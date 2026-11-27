@@ -18,41 +18,28 @@ interface UseExtractColorReturn {
 }
 
 interface Options {
-	textContrast: number;
-	maxColors: number;
-	format: Format;
-	maxSize: number;
-	colorSimilarityThreshold: number;
-	sortBy: SortBy;
-	crossOrigin: string;
+	textContrast?: number | undefined;
+	maxColors?: number | undefined;
+	format?: Format | undefined;
+	maxSize?: number | undefined;
+	colorSimilarityThreshold?: number | undefined;
+	sortBy?: SortBy | undefined;
+	crossOrigin?: string | undefined;
 }
-
-const defaultOptions: Options = {
-	textContrast: defaultTextContrast,
-	maxColors: 3,
-	format: "rgba",
-	maxSize: 18,
-	colorSimilarityThreshold: 50,
-	sortBy: "dominance",
-	crossOrigin: "anonymous",
-};
 
 export const useExtractColors = (
 	imageUrl: string,
-	customOptions: Partial<Options> = {},
+	options?: Options,
 ): UseExtractColorReturn => {
 	const {
-		maxColors,
-		format,
-		textContrast,
-		maxSize,
-		colorSimilarityThreshold,
-		sortBy,
-		crossOrigin,
-	} = {
-		...defaultOptions,
-		...customOptions,
-	};
+		maxColors = 3,
+		format = "rgba",
+		textContrast = defaultTextContrast,
+		maxSize = 18,
+		colorSimilarityThreshold = 50,
+		sortBy = "dominance",
+		crossOrigin = "anonymous",
+	} = options ?? {};
 	const [palette, setPalette] = useState<Color[] | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
@@ -64,13 +51,16 @@ export const useExtractColors = (
 		setPalette(null);
 		async function loadPalette() {
 			try {
-				const result = await extractDominantColors(imageUrl, {
-					maxSize,
-					colorSimilarityThreshold,
-					sortBy,
-					crossOrigin,
-				});
-				if (active) setPalette(result);
+				const image = await loadImage(imageUrl, crossOrigin);
+				if (!active) return;
+				setPalette(
+					extractDominantColors(
+						image,
+						maxSize,
+						colorSimilarityThreshold,
+						sortBy,
+					),
+				);
 			} catch (reason) {
 				if (active)
 					setError(
@@ -108,26 +98,25 @@ export const useExtractColors = (
 	return { ...formatted, textColor, loading, error };
 };
 
-async function extractDominantColors(
+function loadImage(
 	imageUrl: string,
-	{
-		maxSize,
-		colorSimilarityThreshold,
-		sortBy,
-		crossOrigin,
-	}: Pick<
-		Options,
-		"maxSize" | "colorSimilarityThreshold" | "sortBy" | "crossOrigin"
-	>,
-): Promise<Color[]> {
-	const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+	crossOrigin: string,
+): Promise<HTMLImageElement> {
+	return new Promise((resolve, reject) => {
 		const img = new Image();
 		img.crossOrigin = crossOrigin;
 		img.onload = () => resolve(img);
 		img.onerror = () => reject(new Error("Failed to load image"));
 		img.src = imageUrl;
 	});
+}
 
+function extractDominantColors(
+	image: HTMLImageElement,
+	maxSize: number,
+	colorSimilarityThreshold: number,
+	sortBy: SortBy,
+): Color[] {
 	const { width, height } = image;
 	if (
 		!Number.isFinite(width) ||

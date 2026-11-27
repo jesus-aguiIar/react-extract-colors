@@ -1,199 +1,109 @@
-<h2 align="center">React Extract Colors</h2>
+<img src="./assets/logo.svg" width="56" height="56" alt="">
 
-<div align="center">
-   <p align="center">A react hook to extract dominant colors from an image 🎨<br>
-    </p>
-   <p align="center">
-      <a href="https://github.com/JesusAguilarAliaga/react-extract-colors"><b>Github</b></a> •
-      <a href="https://react-extract-colors.netlify.app/"><b>Examples(Documentation)</b></a>
-   </p>
-   <img src="https://i.imgur.com/MfezyZT.jpg">
-   <br>
-</div>
+# React Extract Colors
 
-<h3 align="center">
-   Installation 🚀
-</h3>
+[![npm version](https://img.shields.io/npm/v/react-extract-colors.svg)](https://www.npmjs.com/package/react-extract-colors)
+[![Tests on main](https://github.com/jesus-aguiIar/react-extract-colors/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/jesus-aguiIar/react-extract-colors/actions/workflows/test.yml?query=branch%3Amain)
 
-<p align="center">Get started with these simple installation steps.</p>
+Extract a color palette from an image with a React hook. Choose dominant colors for backgrounds or vibrant colors for accents.
 
-###### Using npm
+**[Try the live demo on Netlify](https://react-extract-colors.netlify.app/)** · [API reference](#api) · [GitHub](https://github.com/jesus-aguiIar/react-extract-colors)
 
-```bash
+## Installation
+
+```sh
 npm install react-extract-colors
 ```
 
-###### Using yarn
+With pnpm, use `pnpm add react-extract-colors`. With Yarn, use `yarn add react-extract-colors`.
 
-```bash
-yarn add react-extract-colors
-```
+## Usage
 
-###### Using pnpm
+Call `useExtractColors` inside a React component. Pass the URL of an image your browser can display, such as a photo served from your app.
 
-```bash
-pnpm add react-extract-colors
-```
-
-Once the package is installed, you can import the library using `import` approach:
-
-```js
-import { useExtractColors } from "react-extract-colors";
-```
-
-<h3 align="center">
-   Usage 👨‍💻
-</h3>
-
-- mainly supported image formats: (`png, jpg, jpeg, svg, gif and more...`)
-
-When you have an image and you want to extract the dominant color, you can use the hook. The hook returns an object containing various properties.
-
-If you only need the dominant color, you can use the `dominantColor` property.
-
-You can also get the darker and lighter variants to create a grandient color.
-
-```js
+```jsx
 import { useExtractColors } from "react-extract-colors";
 
-const image = "https://picsum.photos/id/237/200/300";
+export function PhotoPalette({ imageUrl }) {
+  const { colors, loading, error } = useExtractColors(imageUrl, {
+    format: "hex",
+    maxColors: 5,
+    sortBy: "dominance",
+  });
 
-const { colors, dominantColor, textColor, darkerColor, lighterColor, loading, error } =
-  useExtractColors(image);
+  if (loading) return <p>Reading the image…</p>;
+  if (error) return <p>Could not read the image.</p>;
+  if (colors.length === 0) return <p>No visible colors found.</p>;
+
+  return (
+    <ul>
+      {colors.map((color, index) => (
+        <li key={index} style={{ borderLeft: `1em solid ${color}`, paddingLeft: 8 }}>
+          {color}
+        </li>
+      ))}
+    </ul>
+  );
+}
 ```
 
-##### Properties 📊
+For an image hosted on another domain, its server must allow your origin through CORS so the browser can read the pixels.
 
-| Property        | Description                                 |
-| :-------------- | :------------------------------------------ |
-| `colors`        | An array containing the top dominant colors |
-| `dominantColor` | The dominant color of the image             |
-| `textColor`     | An opaque hex text color for the dominant background, or `null` until a visible shade is available |
-| `darkerColor`   | A darker variant of the dominant color      |
-| `lighterColor`  | A lighter variant of the dominant color     |
-| `loading`       | Indicates whether the image is loading      |
-| `error`         | Indicates whether the image has an error    |
+## API
 
-<h3 align="center">
-   Example 🌟
-</h3>
+`useExtractColors(imageUrl, options?)` returns the palette and its loading state. Extraction runs in the browser after the component mounts.
 
-Explore a basic example to understand its usage, you can utilize it in various ways.
+| Result | Meaning |
+| --- | --- |
+| `colors` | Palette in the requested format and ranking, capped at `maxColors`. |
+| `dominantColor` | The top-ranked shade. With `vibrance`, this is the most vibrant shade. |
+| `darkerColor`, `lighterColor` | Darker and lighter variants of the top-ranked shade, useful as gradient stops. |
+| `textColor` | Opaque hex text color for use on `dominantColor` in either ranking mode. Returns `null` until a visible shade is available. |
+| `loading` | `true` while the hook reads the image. |
+| `error` | An `Error` if the image could not be loaded or read, otherwise `null`. |
 
-```js
-// import the hook
+### Options
+
+Passing `undefined` for an option uses its default value.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `sortBy` | `"dominance"` | Rank color groups by pixel count. Use `"vibrance"` to rank by saturation × brightness. Ranking happens before the palette is limited to `maxColors`. |
+| `maxColors` | `3` | Maximum number of palette entries. Zero or a negative value returns an empty `colors` array. The hook still computes the top shade, its variants and its text color. |
+| `format` | `"rgba"` | Output format for the palette and its shades. Also accepts `"hex"`, `"rgb"`, `"hsl"`, and `"hsv"`. |
+| `maxSize` | `18` | Maximum length of the sampled image’s longest side, in pixels. Increase it to pick up finer details. |
+| `colorSimilarityThreshold` | `50` | RGB distance used to group similar shades. Lower it to keep close tones separate. Use `0` to count exact RGBA shades. |
+| `textContrast` | `4.5` | Target contrast ratio for `textColor` against `dominantColor`. Accepts finite numbers from 1 to 21. |
+| `crossOrigin` | `"anonymous"` | Image request’s CORS mode. Use `"use-credentials"` for a server configured to accept credentialed requests. |
+
+### How similar colors are grouped
+
+The hook skips sampled pixels with an alpha below 125 out of 255. Each remaining shade joins the first group whose starting color is within the chosen RGB distance. The most frequent exact shade represents each group. Ties go to the shade sampled first.
+
+### Text on the first palette color
+
+`textColor` and `textContrast` were added after npm version 1.6.0. For a card or badge, apply `dominantColor` as its background and `textColor` as its foreground. This works with either `sortBy` setting.
+
+```jsx
 import { useExtractColors } from "react-extract-colors";
 
-const image = "https://picsum.photos/id/237/200/300";
-
-const App = () => {
-  const { dominantColor, textColor } = useExtractColors(image, {
+export function PhotoBadge({ imageUrl, children }) {
+  const { dominantColor, textColor } = useExtractColors(imageUrl, {
     format: "hex",
     textContrast: 7,
   });
 
-  return (
-    <div style={{ backgroundColor: dominantColor ?? undefined, color: textColor ?? undefined }}>
-      <h1>Extract Color</h1>
-      <img src={image} alt="random image" width="200" height="300" />
-    </div>
-  );
-};
-
-export default App;
+  if (!dominantColor || !textColor) return null;
+  return <span style={{ backgroundColor: dominantColor, color: textColor }}>{children}</span>;
+}
 ```
 
-<h4 align="center">
-   Example with settings ⚙️
-</h4>
+The hook selects a gray that meets the target ratio when possible. If the target is unreachable, it uses whichever of black or white gives higher contrast. For a translucent RGBA background, the calculation assumes a white surface underneath. Values outside the supported range use the default of 4.5. [WCAG contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
 
-You can also pass settings to the hook, to customize the extraction process.
+## Compatibility
 
-> **Note:** passing settings to the hook is an optional step.
+React and React DOM 17 or later. The package provides ESM and CommonJS entry points with TypeScript declarations for each. With CommonJS, use `const { useExtractColors } = require("react-extract-colors")`.
 
-```js
-// import the hook
-import { useExtractColors } from "react-extract-colors";
+## License
 
-const image = "https://picsum.photos/id/237/200/300";
-
-const App = () => {
-  // Use the hook to extract the dominant color
-  const { colors } = useExtractColors(image, {
-    maxColors: 3,
-    format: "hex",
-    maxSize: 200,
-    sortBy: "vibrance",
-  });
-
-  const [color1, color2, color3] = colors;
-
-  return (
-    // set the background color to the dominant color
-    <div style={{ border: `1px solid ${color1}` }}>
-      <h1 style={{ color: color3 }}>Extract Color</h1>
-      <img src={image} alt="random image" width="200" height="300" />
-    </div>
-  );
-};
-
-export default App;
-```
-
-<h3 align="center">
-   Settings ⚙️
-</h3>
-
-#### maxColors:
-
-The maxColors parameter determines the number of colors to be included in the `colors` array. When you provide an image to the hook, it extracts and counts the colors, returning the most dominant ones based on the specified limit.
-
-> **Note:** While you can retrieve more colors than the recommended limit, use this feature judiciously as its effectiveness varies with each image.
-
-#### format:
-
-You can specify the color format using one of the following options: `rgba`, `rgb`, `hex`, `hsl`, or `hsv`.
-
-#### textContrast
-
-Set the target contrast ratio for text on a solid `dominantColor` background. The default is `4.5`, the WCAG AA minimum for regular text. A higher target such as `7` increases contrast when the background allows it. [WCAG contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
-
-The hook chooses the better of light or dark text, then finds the nearest gray on that side that meets the target. If the target is unreachable, it returns whichever of black and white gives the highest contrast. Values outside `1–21` and non-finite numbers use the default.
-
-`textColor` is always an opaque CSS hex color. For translucent `rgba` backgrounds the calculation assumes a white surface underneath. Changing `textContrast` reuses the extracted palette.
-
-#### maxSize:
-
-The maxSize is the size at which the image will be processed to extract colors. The smaller the size, the faster the processing may be, but it affects color accuracy to some extent. If you need more precision, you can set a higher value at the expense of sacrificing some speed.
-
-#### colorSimilarityThreshold:
-
-A shade joins the first group whose starting color is less than `colorSimilarityThreshold` units away in RGB space (default `50`). Each group returns its most frequent sampled RGBA shade. If shades tie, the first one sampled wins. Set the threshold to `0` to count exact shades separately.
-
-#### sortBy:
-
-The `sortBy` parameter controls the sorting of the returned colors. You can select from the following options:
-
-- **`vibrance`**: Ranks groups by the saturation and brightness of their representative shade.
-- **`dominance`**: Ranks groups by the total number of sampled pixels in each group.
-
-| Parameter                  | Type     | Description                                                                         | Options (recommended)          |
-| :------------------------- | :------- | :---------------------------------------------------------------------------------- | :----------------------------- |
-| `maxColors`                | `number` | Number of colors to get in the `colors` array **default: 3**                        | 0-100                          |
-| `format`                   | `string` | Format to get the colors **default: rgba**                                          | `rgba` `rgb` `hex` `hsl` `hsv` |
-| `textContrast` | `number` | Target text-to-background contrast ratio **default: 4.5** | 1–21 |
-| `maxSize`                  | `number` | Size to extract the colors **default: 18**                                          | 0-500                          |
-| `colorSimilarityThreshold` | `number` | RGB distance threshold for grouping similar shades. **default: 50** | 0-500                          |
-| `sortBy`                   | `string` | Determines the sorting method for the returned colors **default: dominance**        | `vibrance` `dominance`         |
-
-<h3 align="center">
-   Credits  🙌
-</h3>
-
-The React Extract Colors hook was created by [Jesús Aguilar](https://github.com/JesusAguilarAliaga)
-
-<h3 align="center">
-   License 📝
-</h3>
-
-Licensed under the [MIT License](LICENSE.md) - see the [LICENSE.md](LICENSE.md) file for details.
+MIT · [Jesús Aguilar](https://github.com/jesus-aguiIar) · [License](https://github.com/jesus-aguiIar/react-extract-colors/blob/main/LICENSE.md)

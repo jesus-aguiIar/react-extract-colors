@@ -1,10 +1,10 @@
 import { useExtractColors } from "react-extract-colors";
 
-export function usePalette(url: string) {
+export function usePalette(url: string, maxSize?: number) {
 	const result = useExtractColors(url, {
 		format: "hex",
 		sortBy: "vibrance",
-		maxSize: 40,
+		maxSize,
 		textContrast: 7,
 		maxColors: 4,
 		colorSimilarityThreshold: 10,

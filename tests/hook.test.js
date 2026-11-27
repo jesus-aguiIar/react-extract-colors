@@ -49,6 +49,33 @@ describe("palette extraction", () => {
 	});
 
 	test.each([
+		"maxSize",
+		"maxColors",
+		"sortBy",
+		"colorSimilarityThreshold",
+		"format",
+		"textContrast",
+		"crossOrigin",
+	])("treats an undefined %s as an omitted option", async (key) => {
+		const { result, rerender } = mount({ [key]: undefined });
+		await images.load([red, gray, [130, 128, 128, 255], gray, green, blue], {
+			width: 90,
+			height: 45,
+		});
+		expect(images.requests[0].crossOrigin).toBe("anonymous");
+		expect(images.getImageData).toHaveBeenCalledWith(0, 0, 18, 9);
+		expect(result.current).toMatchObject({
+			colors: ["rgba(128,128,128,1)", "rgba(255,0,0,1)", "rgba(0,255,0,1)"],
+			error: null,
+			loading: false,
+		});
+		const original = result.current;
+		rerender({ url: "first.png", options: {} });
+		expect(result.current).toEqual(original);
+		expect(images.requests).toHaveLength(1);
+	});
+
+	test.each([
 		["hex", blue, "#0000ff"],
 		["rgb", blue, "rgb(0,0,255)"],
 		["hsl", red, "hsl(0, 100%, 50%)"],
@@ -178,6 +205,16 @@ describe("palette extraction", () => {
 			expect(result.current.dominantColor).toBe("#0000ff");
 		},
 	);
+
+	test("treats a negative maxColors the same as zero", async () => {
+		const { result, rerender } = mount({ format: "hex", maxColors: 0 });
+		await images.load([gray, red, blue]);
+		const original = result.current;
+		expect(original.colors).toEqual([]);
+		rerender({ url: "first.png", options: { format: "hex", maxColors: -1 } });
+		expect(result.current).toEqual(original);
+		expect(images.requests).toHaveLength(1);
+	});
 
 	test("ignores transparent pixels and handles an entirely transparent image", async () => {
 		const { result, rerender } = mount();
@@ -411,6 +448,15 @@ describe("changes in inputs and error handling", () => {
 		await images.load([blue]);
 		await images.load([red], { request: first });
 		expect(result.current.dominantColor).toBe("#0000ff");
+		expect(images.drawImage).toHaveBeenCalledTimes(1);
+		expect(images.getImageData).toHaveBeenCalledTimes(1);
+	});
+
+	test("skips canvas work when the image loads after unmount", async () => {
+		const { unmount } = mount();
+		unmount();
+		await images.load([red]);
+		expect(images.getContext).not.toHaveBeenCalled();
 	});
 
 	test("sets loading again when a completed request is replaced", async () => {
