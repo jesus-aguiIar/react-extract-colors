@@ -1,6 +1,6 @@
 {
 	"name": "react-extract-colors",
-	"version": "1.6.0",
+	"version": "1.7.0",
 	"type": "module",
 	"description": "A React hook for extracting dominant or vibrant color palettes from images in the browser.",
 	"main": "dist/index.cjs",
