@@ -155,59 +155,32 @@ async function extractDominantColors(
 	});
 }
 
+function getFormatter(format: Format) {
+	switch (format) {
+		case "hex":
+			return formatToHex;
+		case "rgb":
+			return formatToRgb;
+		case "hsl":
+			return formatToHsl;
+		case "hsv":
+			return formatToHsv;
+		default:
+			return formatToRgba;
+	}
+}
+
 function formatColors(
 	colors: ExtractedColors,
 	options: Options,
 ): FormattedColors {
-	const { format, maxColors } = options;
-
-	switch (format) {
-		case "hex":
-			return {
-				dominantColor: formatToHex(colors.dominantColor),
-				darkerColor: formatToHex(colors.darkerColor),
-				lighterColor: formatToHex(colors.lighterColor),
-				colors: colors.colors
-					.slice(0, maxColors)
-					.map((color) => formatToHex(color)),
-			};
-		case "rgb":
-			return {
-				dominantColor: formatToRgb(colors.dominantColor),
-				darkerColor: formatToRgb(colors.darkerColor),
-				lighterColor: formatToRgb(colors.lighterColor),
-				colors: colors.colors
-					.slice(0, maxColors)
-					.map((color) => formatToRgb(color)),
-			};
-		case "hsl":
-			return {
-				dominantColor: formatToHsl(colors.dominantColor),
-				darkerColor: formatToHsl(colors.darkerColor),
-				lighterColor: formatToHsl(colors.lighterColor),
-				colors: colors.colors
-					.slice(0, maxColors)
-					.map((color) => formatToHsl(color)),
-			};
-		case "hsv":
-			return {
-				dominantColor: formatToHsv(colors.dominantColor),
-				darkerColor: formatToHsv(colors.darkerColor),
-				lighterColor: formatToHsv(colors.lighterColor),
-				colors: colors.colors
-					.slice(0, maxColors)
-					.map((color) => formatToHsv(color)),
-			};
-		default:
-			return {
-				dominantColor: formatToRgba(colors.dominantColor),
-				darkerColor: formatToRgba(colors.darkerColor),
-				lighterColor: formatToRgba(colors.lighterColor),
-				colors: colors.colors
-					.slice(0, maxColors)
-					.map((color) => formatToRgba(color)),
-			};
-	}
+	const format = getFormatter(options.format);
+	return {
+		dominantColor: format(colors.dominantColor),
+		darkerColor: format(colors.darkerColor),
+		lighterColor: format(colors.lighterColor),
+		colors: colors.colors.slice(0, options.maxColors).map(format),
+	};
 }
 
 function getDarkerColor(color: Color): Color {

@@ -3,16 +3,27 @@
 	"version": "1.6.0",
 	"type": "module",
 	"description": "A react component to extract dominant colors from an image",
-	"main": "dist/index.cjs.js",
+	"main": "dist/index.cjs",
 	"module": "dist/index.esm.js",
-	"types": "dist/types/index.d.ts",
+	"types": "dist/index.d.ts",
 	"exports": {
 		".": {
-			"types": "./dist/types/index.d.ts",
-			"import": "./dist/index.esm.js",
-			"require": "./dist/index.cjs.js"
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.esm.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
 		}
 	},
+	"files": [
+		"dist/index.esm.js",
+		"dist/index.cjs",
+		"dist/index.d.ts",
+		"dist/index.d.cts"
+	],
 	"scripts": {
 		"build:dev": "rollup -c --environment NODE_ENV:development",
 		"build": "rollup -c --environment NODE_ENV:production",
@@ -20,7 +31,8 @@
 		"pretest": "npm run build -- --forceExit",
 		"test": "vitest run",
 		"format": "biome format --write",
-		"lint": "biome lint"
+		"lint": "biome lint",
+		"prepack": "npm run build -- --forceExit"
 	},
 	"author": "Jesús Aguilar",
 	"license": "MIT",
@@ -54,6 +66,7 @@
 		"@vitest/coverage-v8": "^4.1.12",
 		"jsdom": "^26.1.0",
 		"rollup": "^4.9.4",
+		"rollup-plugin-dts": "6.5.1",
 		"rollup-plugin-peer-deps-external": "^2.2.4",
 		"tslib": "^2.7.0",
 		"typescript": "^5.6.2",

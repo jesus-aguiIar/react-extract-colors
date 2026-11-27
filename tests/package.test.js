@@ -15,16 +15,19 @@ const require = createRequire(import.meta.url);
 const tsc = require.resolve("typescript/bin/tsc");
 let consumer;
 let files;
-let commonjs;
 
 beforeAll(() => {
 	consumer = mkdtempSync(join(tmpdir(), "extract-colors-consumer-"));
 	const env = { ...process.env, npm_config_cache: join(consumer, "cache") };
 	const [archive] = JSON.parse(
-		execFileSync("npm", ["pack", "--json", "--pack-destination", consumer], {
-			env,
-			encoding: "utf8",
-		}),
+		execFileSync(
+			"npm",
+			["pack", "--ignore-scripts", "--json", "--pack-destination", consumer],
+			{
+				env,
+				encoding: "utf8",
+			},
+		),
 	);
 	files = archive.files.map(({ path }) => path);
 
@@ -69,11 +72,6 @@ beforeAll(() => {
 		);
 	}
 	mkdirSync(join(consumer, "empty-types"));
-	commonjs = spawnSync(process.execPath, ["consumer.cjs"], {
-		cwd: consumer,
-		encoding: "utf8",
-	});
-	if (commonjs.error) throw commonjs.error;
 }, 120_000);
 
 afterAll(() => {
@@ -81,7 +79,12 @@ afterAll(() => {
 });
 
 test("ships the runtime and public declarations, excluding tests and CI", () => {
-	expect(files).toContain("dist/types/index.d.ts");
+	expect(files.filter((path) => path.startsWith("dist/")).sort()).toEqual([
+		"dist/index.cjs",
+		"dist/index.d.cts",
+		"dist/index.d.ts",
+		"dist/index.esm.js",
+	]);
 	expect(
 		files.some((path) =>
 			/^(tests\/|coverage\/|\.github\/|vitest\.config\.)/.test(path),
@@ -96,16 +99,11 @@ test("imports the ESM package and can render the hook on the server", () => {
 	});
 });
 
-test("the CommonJS probe can reach the package entry", () => {
-	if (commonjs.status !== 0) {
-		expect(commonjs.stderr).toMatch(
-			/ReferenceError: require is not defined|ERR_REQUIRE_ESM/,
-		);
-	}
-});
-
-test.fails("loads the public hook via CommonJS require", () => {
-	expect(commonjs.status, commonjs.stderr).toBe(0);
+test("loads the public hook via CommonJS require", () => {
+	execFileSync(process.execPath, ["consumer.cjs"], {
+		cwd: consumer,
+		stdio: "pipe",
+	});
 });
 
 function checkTypes(fixture, mode, skipLibCheck) {
@@ -145,7 +143,7 @@ test.each(
 	},
 );
 
-test.fails.each(["node16", "nodenext"])(
+test.each(["node16", "nodenext"])(
 	"provides declarations for a typed CommonJS consumer with %s",
 	(mode) => checkTypes("consumer.cts", mode, false),
 );

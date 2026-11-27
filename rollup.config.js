@@ -4,15 +4,15 @@ import typescript from "@rollup/plugin-typescript";
 import commonjs from "@rollup/plugin-commonjs";
 import resolve from "@rollup/plugin-node-resolve";
 import external from "rollup-plugin-peer-deps-external";
+import { dts } from "rollup-plugin-dts";
 
 const devMode = process.env.NODE_ENV === "development";
-console.log(`${devMode ? "development" : "production"} mode bundle`);
 
-export default {
+const runtime = {
 	input: "src/index.ts",
 	output: [
 		{
-			file: "dist/index.cjs.js",
+			file: "dist/index.cjs",
 			format: "cjs",
 			sourcemap: devMode ? "inline" : false,
 		},
@@ -25,8 +25,8 @@ export default {
 	plugins: [
 		typescript({ tsconfig: "./tsconfig.json", sourceMap: devMode }),
 		commonjs(),
-        resolve(),
-        external(),
+		resolve(),
+		external(),
 		terser({
 			ecma: 2020,
 			mangle: {
@@ -34,6 +34,7 @@ export default {
 				reserved: ["useExtractColors"],
 			},
 			compress: {
+				passes: 2,
 				module: true,
 				toplevel: true,
 				unsafe_arrows: true,
@@ -47,3 +48,15 @@ export default {
 	],
 	external: ["react", "react-dom"],
 };
+
+export default [
+	runtime,
+	{
+		input: "dist/types/index.d.ts",
+		output: [
+			{ file: "dist/index.d.ts", format: "es" },
+			{ file: "dist/index.d.cts", format: "es" },
+		],
+		plugins: [dts()],
+	},
+];
