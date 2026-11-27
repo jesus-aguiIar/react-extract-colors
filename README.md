@@ -125,7 +125,7 @@ const App = () => {
     maxColors: 3,
     format: "hex",
     maxSize: 200,
-    orderBy: "vibrance",
+    sortBy: "vibrance",
   });
 
   const [color1, color2, color3] = colors;
@@ -162,21 +162,21 @@ The maxSize is the size at which the image will be processed to extract colors. 
 
 #### colorSimilarityThreshold:
 
-The `colorSimilarityThreshold` parameter defines the minimum similarity between colors to be considered identical. If you want to avoid retrieving colors that look very similar, you can adjust this value. A threshold of `0` will return all detected colors without filtering for similarity.
+A shade joins the first group whose starting color is less than `colorSimilarityThreshold` units away in RGB space (default `50`). Each group returns its most frequent sampled RGBA shade. If shades tie, the first one sampled wins. Set the threshold to `0` to count exact shades separately.
 
 #### sortBy:
 
 The `sortBy` parameter controls the sorting of the returned colors. You can select from the following options:
 
-- **`vibrance`**: Sorts colors by brightness, giving priority to the most vibrant ones.
-- **`dominance`**: Sorts colors based on how frequently they appear in the image.
+- **`vibrance`**: Ranks groups by the saturation and brightness of their representative shade.
+- **`dominance`**: Ranks groups by the total number of sampled pixels in each group.
 
 | Parameter                  | Type     | Description                                                                         | Options (recommended)          |
 | :------------------------- | :------- | :---------------------------------------------------------------------------------- | :----------------------------- |
 | `maxColors`                | `number` | Number of colors to get in the `colors` array **default: 3**                        | 0-100                          |
 | `format`                   | `string` | Format to get the colors **default: rgba**                                          | `rgba` `rgb` `hex` `hsl` `hsv` |
 | `maxSize`                  | `number` | Size to extract the colors **default: 18**                                          | 0-500                          |
-| `colorSimilarityThreshold` | `number` | Minimum similarity threshold for colors to be considered identical. **default: 50** | 0-500                          |
+| `colorSimilarityThreshold` | `number` | RGB distance threshold for grouping similar shades. **default: 50** | 0-500                          |
 | `sortBy`                   | `string` | Determines the sorting method for the returned colors **default: dominance**        | `vibrance` `dominance`         |
 
 <h3 align="center">

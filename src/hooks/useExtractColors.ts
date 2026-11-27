@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-type ColorMap = { [key: string]: number };
 type SortBy = "vibrance" | "dominance";
 type Format = "hex" | "rgb" | "hsl" | "hsv" | "rgba";
 
@@ -9,8 +8,6 @@ interface Color {
 	g: number;
 	b: number;
 	a: number;
-	count?: number;
-	saturation?: number;
 }
 
 interface FormattedColors {
@@ -130,24 +127,7 @@ async function extractDominantColors(
 			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 			const pixels = imageData.data;
 
-			const colorMap: ColorMap = countColors(
-				pixels,
-				colorSimilarityThreshold,
-				sortBy,
-			);
-
-			const colors: Color[] = Object.keys(colorMap)
-				.map((color) => {
-					const [r, g, b, a] = color.split(",").map(Number);
-					const hsvToString = formatToHsv({ r, g, b, a });
-					const { s, v } = parseHsvString(hsvToString);
-					return { r, g, b, a, count: colorMap[color], saturation: s * v };
-				})
-				.sort((a, b) =>
-					sortBy === "dominance"
-						? b.count - a.count
-						: b.saturation - a.saturation,
-				);
+			const colors = extractPalette(pixels, colorSimilarityThreshold, sortBy);
 
 			let dominantColor: Color | null = null;
 			let darkerColor: Color | null = null;
@@ -236,7 +216,7 @@ function getDarkerColor(color: Color): Color {
 	const darkerGreen = Math.max(0, g - 50);
 	const darkerBlue = Math.max(0, b - 50);
 
-	return { r: darkerRed, g: darkerGreen, b: darkerBlue, a, count: color.count };
+	return { r: darkerRed, g: darkerGreen, b: darkerBlue, a };
 }
 
 function getLighterColor(color: Color): Color {
@@ -250,7 +230,6 @@ function getLighterColor(color: Color): Color {
 		g: lighterGreen,
 		b: lighterBlue,
 		a,
-		count: color.count,
 	};
 }
 
@@ -353,69 +332,68 @@ const formatToHsv = (rgba: Color | null): string => {
 	return `hsv(${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(v * 100)}%)`;
 };
 
-const colorDistance = (
-	color1: [number, number, number, number],
-	color2: [number, number, number, number],
-): number => {
-	const [r1, g1, b1] = color1;
-	const [r2, g2, b2] = color2;
-	return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
-};
+type CountedShade = Color & { count: number };
 
-const parseHsvString = (
-	hsvString: string,
-): { h: number; s: number; v: number } => {
-	const hsvRegex = /hsv\((\d+),\s*(\d+)%?,\s*(\d+)%?\)/;
-	const match = hsvString.match(hsvRegex);
+interface ColorGroup {
+	anchor: Color;
+	representative: CountedShade;
+	total: number;
+}
 
-	if (!match) {
-		throw new Error("Invalid HSV string format");
-	}
+function vibrance({ r, g, b }: Color): number {
+	// Keep the same whole-percent HSV precision as the public HSV formatter.
+	const max = Math.max(r, g, b) / 255;
+	if (max === 0) return 0;
+	const min = Math.min(r, g, b) / 255;
+	const saturation = Math.round(((max - min) / max) * 100) / 100;
+	const value = Math.round(max * 100) / 100;
+	return saturation * value;
+}
 
-	const h = parseInt(match[1], 10) / 360;
-	const s = parseInt(match[2], 10) / 100;
-	const v = parseInt(match[3], 10) / 100;
-
-	return { h, s, v };
-};
-
-function countColors(
+function extractPalette(
 	pixels: Uint8ClampedArray,
-	colorSimilarityThreshold: number,
-	sortBy: "vibrance" | "dominance",
-): ColorMap {
-	const colorMap: ColorMap = {};
-	const uniqueColors: { [key: string]: [number, number, number, number] } = {};
-
+	threshold: number,
+	sortBy: SortBy,
+): Color[] {
+	const shades = new Map<number, CountedShade>();
 	for (let i = 0; i < pixels.length; i += 4) {
+		const a = pixels[i + 3];
+		if (a < 125) continue;
 		const r = pixels[i];
 		const g = pixels[i + 1];
 		const b = pixels[i + 2];
-		const a = pixels[i + 3];
+		const key = (r << 24) | (g << 16) | (b << 8) | a;
+		const shade = shades.get(key);
+		if (shade) shade.count++;
+		else shades.set(key, { r, g, b, a, count: 1 });
+	}
 
-		if (a >= 125) {
-			const newColor: [number, number, number, number] = [r, g, b, a];
-			let foundSimilar = false;
-
-			for (const key in uniqueColors) {
-				const existingColor = uniqueColors[key];
-				if (colorDistance(newColor, existingColor) < colorSimilarityThreshold) {
-					if (sortBy === "dominance") {
-						colorMap[key]++;
-					}
-					foundSimilar = true;
-					break;
-				}
-			}
-
-			if (!foundSimilar) {
-				const colorKey = `${r},${g},${b},${a}`;
-				uniqueColors[colorKey] = newColor;
-				colorMap[colorKey] = 1;
-			}
+	const groups: ColorGroup[] = [];
+	const squaredThreshold = Math.max(0, threshold) ** 2;
+	// Map iteration preserves first appearance for group membership and tied counts.
+	for (const shade of shades.values()) {
+		const group =
+			squaredThreshold > 0 &&
+			groups.find(({ anchor }) => {
+				const dr = anchor.r - shade.r;
+				const dg = anchor.g - shade.g;
+				const db = anchor.b - shade.b;
+				return dr * dr + dg * dg + db * db < squaredThreshold;
+			});
+		if (group) {
+			group.total += shade.count;
+			if (shade.count > group.representative.count)
+				group.representative = shade;
+		} else {
+			groups.push({ anchor: shade, representative: shade, total: shade.count });
 		}
 	}
 
-	return colorMap;
+	return groups
+		.map(({ representative, total }) => ({
+			color: representative,
+			score: sortBy === "dominance" ? total : vibrance(representative),
+		}))
+		.sort((a, b) => b.score - a.score)
+		.map(({ color }) => color);
 }
-

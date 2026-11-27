@@ -91,6 +91,59 @@ describe("palette extraction", () => {
 		expect(result.current.colors).toEqual(["#000000", "#0000ff", "#0a0000"]);
 	});
 
+	test.each([
+		["dominance", ["#ffffff", "#ff8000"]],
+		["vibrance", ["#ff8000", "#ffffff"]],
+	])(
+		"uses the most frequent shade in each group for %s",
+		async (sortBy, expected) => {
+			const nearWhite = [244, 245, 246, 255];
+			const white = [255, 255, 255, 255];
+			const orange = [255, 128, 0, 255];
+			const { result } = mount({ format: "hex", sortBy });
+			await images.load([nearWhite, orange, white, white, white]);
+			expect(result.current.colors).toEqual(expected);
+			expect(result.current.dominantColor).toBe(expected[0]);
+		},
+	);
+
+	test("counts the whole group and keeps its first shade on a frequency tie", async () => {
+		const nearRed = [250, 0, 0, 255];
+		const { result } = mount();
+		await images.load([red, nearRed, nearRed, red, blue, blue, blue]);
+		expect(result.current.colors).toEqual(["#ff0000", "#0000ff"]);
+	});
+
+	test("matches new shades against the original group anchor", async () => {
+		const anchor = [100, 0, 0, 255];
+		const winner = [130, 0, 0, 255];
+		const separate = [160, 0, 0, 255];
+		const { result } = mount();
+		await images.load([anchor, winner, winner, separate]);
+		expect(result.current.colors).toEqual(["#820000", "#a00000"]);
+	});
+
+	test("counts exact RGBA shades separately inside an RGB group", async () => {
+		const { result } = mount();
+		const nearRed = [245, 0, 0, 255];
+		const translucentRed = [255, 0, 0, 150];
+		await images.load([red, translucentRed, nearRed, nearRed]);
+		expect(result.current.colors).toEqual(["#f50000"]);
+	});
+
+	test("ranks vibrance using the winning shade of each group", async () => {
+		const { result } = mount({ format: "hex", sortBy: "vibrance" });
+		const mutedRed = [215, 0, 0, 255];
+		await images.load([red, mutedRed, mutedRed, [0, 235, 0, 255]]);
+		expect(result.current.colors).toEqual(["#00eb00", "#d70000"]);
+	});
+
+	test("counts identical pixels when similarity filtering is disabled", async () => {
+		const { result } = mount({ format: "hex", colorSimilarityThreshold: 0 });
+		await images.load([red, blue, blue]);
+		expect(result.current.colors).toEqual(["#0000ff", "#ff0000"]);
+	});
+
 	test.each([0, 1, 8])(
 		"limits the palette to maxColors=%i and still returns a dominant color",
 		async (maxColors) => {
@@ -202,15 +255,6 @@ describe("known regressions", () => {
 		);
 		expect(alpha).toBeCloseTo(128 / 255, 2);
 	});
-
-	test.fails(
-		"counts identical pixels when similarity filtering is disabled",
-		async () => {
-			const { result } = mount({ format: "hex", colorSimilarityThreshold: 0 });
-			await images.load([red, blue, blue]);
-			expect(result.current.colors).toEqual(["#0000ff", "#ff0000"]);
-		},
-	);
 
 	test.fails(
 		"preserves the newest palette when requests finish out of order",
