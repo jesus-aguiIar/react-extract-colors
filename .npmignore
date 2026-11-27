@@ -1,3 +1,7 @@
 src
 rollup.config.js
+vitest.config.js
+tests/
+coverage/
+.github/
 react-extract-colors*.tgz

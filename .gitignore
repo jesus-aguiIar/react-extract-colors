@@ -1,5 +1,6 @@
 # .npmignore
 node_modules/
 dist/
+coverage/
 .vscode
 react-extract-colors*.tgz
