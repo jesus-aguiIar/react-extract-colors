@@ -76,6 +76,27 @@ describe("palette extraction", () => {
 	});
 
 	test.each([
+		["hex", "#000000"],
+		["rgb", "rgb(0,0,0)"],
+		["rgba", "rgba(0,0,0,0)"],
+		["hsl", "hsl(0,0%,0%)"],
+		["hsv", "hsv(0,0%,0%)"],
+	])(
+		"formats an empty palette and its variants in %s",
+		async (format, fallback) => {
+			const { result } = mount({ format });
+			await images.load([[255, 255, 255, 0]]);
+			expect(result.current).toMatchObject({
+				colors: [],
+				dominantColor: fallback,
+				darkerColor: fallback,
+				lighterColor: fallback,
+				error: null,
+			});
+		},
+	);
+
+	test.each([
 		["dominance", ["#808080", "#ff0000"]],
 		["vibrance", ["#ff0000", "#808080"]],
 	])("sorts by %s", async (sortBy, expected) => {
